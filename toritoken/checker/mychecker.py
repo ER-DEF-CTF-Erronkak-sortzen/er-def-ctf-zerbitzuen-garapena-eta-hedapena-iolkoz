@@ -6,8 +6,11 @@ import http.client
 import socket
 import paramiko
 import hashlib
+import requests
+
 PORT_WEB = 5000
 PORT_API = 5001
+
 def ssh_connect():
     def decorator(func):
         def wrapper(*args, **kwargs):
@@ -54,7 +57,16 @@ class MyChecker(checkerlib.BaseChecker):
         file_path_web = '/app/templates/login.html'
         # check if index.html from toritoken_web has been changed by comparing its hash with the hash of the original file
         if not self._check_web_integrity(file_path_web):
-            return checkerlib.CheckResult.FAULTY            
+            return checkerlib.CheckResult.FAULTY   
+        
+        file_path_web_app = '/app/app.py'
+        if not self._check_web_app_login_integrity():
+            return checkerlib.CheckResult.FAULTY   
+
+
+        file_path_api = '/app/app.py'
+        if not self._check_api_integrity(file_path_api):
+            return checkerlib.CheckResult.FAULTY       
               
         return checkerlib.CheckResult.OK
     
@@ -82,8 +94,38 @@ class MyChecker(checkerlib.BaseChecker):
         
         output = stdout.read().decode().strip()
         hashed = hashlib.md5(output.encode()).hexdigest()
-        logging.info(f'Hashed web: {hashed}')
         return hashlib.md5(output.encode()).hexdigest() == '80f61ba6afba238f04fa6906e650e1c8' # 
+    
+    # funtzio honek web app-ean loginak funtzionatzen duela konprobatzeko, erabiltzaile legitimo batek login egin ahal izatea
+    @ssh_connect()
+    def _check_web_app_login_integrity(self):
+        ssh_session = self.client
+        url = 'http://localhost:5000/login'
+        text_to_search = 'Ongi etorri'
+        curl_command = "curl -X POST http://localhost:5000/login -H 'Content-type: application/x-www-form-urlencoded' -d 'username=admin&password=password'"
+        
+        stdin, stdout, stderr = ssh_session.exec_command(curl_command)
+        curl_response = stdout.read().decode()
+        logging.info(f'curl_response: {curl_response}')
+        
+        if text_to_search in curl_response:
+            return True
+        else:
+            return False
+        
+    
+    @ssh_connect()
+    def _check_api_integrity(self, path):
+        ssh_session = self.client
+        command = f"docker exec toritoken_api_1 sh -c 'cat {path}'"
+        stdin, stdout, stderr = ssh_session.exec_command(command)
+        if stderr.channel.recv_exit_status() != 0:
+            return False
+        
+        output = stdout.read().decode().strip()
+        hashed = hashlib.md5(output.encode()).hexdigest()
+        #logging.info(f'Hashed api py: {hashed}')
+        return hashlib.md5(output.encode()).hexdigest() == '7bab2b1068b42fa1b8598de77180e3eb' # 
     
       
     # Private Funcs - Return False if error
@@ -123,19 +165,7 @@ class MyChecker(checkerlib.BaseChecker):
             if conn:
                 conn.close()
 
-    def _check_port_api(self, ip, port):
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(5)
-            result = sock.connect_ex((ip, port))
-            return result == 0
-        except socket.error as e:
-            print(f"Exception: {e}")
-            return False
-        finally:
-            sock.close()
-
-    
+        
   
 if __name__ == '__main__':
     checkerlib.run_check(MyChecker)

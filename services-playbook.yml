@@ -32,11 +32,12 @@
       shell: chmod +x {{ services_destination_folder }}{{ item }}/run_{{ item }}.sh
       loop: "{{ services_to_install.stdout_lines }}"
 
-    - name: Install Docker Compose and Docker.io
+    - name: Install Docker Compose and Docker.io and curl
       apt:
         name:
           - docker-compose
           - docker.io
+          - curl
         state: present
 
     - name: Execute run script
