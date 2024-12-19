@@ -1,0 +1,34 @@
+version: '3'
+services:
+  web:
+    build:
+      context: ./web
+    ports:
+      - "5000:5000"
+    volumes:
+      - web_data:/data
+    depends_on:
+      - db
+
+  api:
+    build:
+      context: ./api
+    ports:
+      - "5001:5001"
+    environment:
+      SECRET_KEY: "supersecretkey"
+    depends_on:
+      - db
+
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: ctf
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+  
+volumes:
+  web_data:
+  db_data:
